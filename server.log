@@ -1,0 +1,44 @@
+$ turbo run dev --filter=@packages/main-site
+
+Attention:
+Turborepo now collects completely anonymous telemetry regarding usage.
+This information is used to shape the Turborepo roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://turborepo.com/docs/telemetry
+
+• turbo 2.7.2
+• Packages in scope: @packages/main-site
+• Running dev in 1 packages
+• Remote caching disabled
+@packages/main-site:dev: cache bypass, force executing de848a0ccf9d73cc
+@packages/main-site:dev: $ NODE_ENV=development bun with-env next dev --turbo ${REMOTE_DEV:+-H 0.0.0.0} --port 4007
+@packages/main-site:dev: $ bun run --env-file=../../.env -- next dev --turbo --port "4007"
+@packages/main-site:dev: [vercel-toolbar] No project info found. Make sure you run `vc link` in your project directory.
+@packages/main-site:dev: [@sentry/nextjs] ACTION REQUIRED: To instrument navigations, the Sentry SDK requires you to export an `onRouterTransitionStart` hook from your `instrumentation-client.(js|ts)` file. You can do so by adding `export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;` to the file.
+@packages/main-site:dev: ▲ Next.js 16.1.6 (Turbopack, Cache Components)
+@packages/main-site:dev: - Local:         http://localhost:4007
+@packages/main-site:dev: - Network:       http://192.168.0.2:4007
+@packages/main-site:dev: - Experiments (use with caution):
+@packages/main-site:dev:   · clientTraceMetadata
+@packages/main-site:dev:
+@packages/main-site:dev: ✓ Starting...
+@packages/main-site:dev: Attention: Next.js now collects completely anonymous telemetry regarding usage.
+@packages/main-site:dev: This information is used to shape Next.js' roadmap and prioritize features.
+@packages/main-site:dev: You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+@packages/main-site:dev: https://nextjs.org/telemetry
+@packages/main-site:dev:
+@packages/main-site:dev: ○ Compiling instrumentation Node.js ...
+@packages/main-site:dev: ✓ Ready in 11.3s
+@packages/main-site:dev: ○ Compiling /[owner]/[name]/issues/[number] ...
+@packages/main-site:dev: ✓ Finished writing to filesystem cache in 11.5s
+@packages/main-site:dev: ⨯ (FiberFailure) RpcDefectError: RpcDefectError: Function execution timed out (maximum duration: 1s)
+@packages/main-site:dev:
+@packages/main-site:dev:     at decodeExit (/app/apps/main-site/.next/dev/server/chunks/ssr/[root-of-the-server]__78b77b71._.js:871:203)
+@packages/main-site:dev:     at /app/apps/main-site/.next/dev/server/chunks/ssr/[root-of-the-server]__78b77b71._.js:911:26
+@packages/main-site:dev: ✓ Compiled in 499ms
+@packages/main-site:dev:  GET /test-owner/test-repo/issues/1 200 in 1886ms (compile: 946ms, proxy.ts: 19ms, generate-params: 138ms, render: 921ms)
+@packages/main-site:dev: ○ Compiling /api/auth/[...all] ...
+@packages/main-site:dev:  GET /api/auth/get-session 200 in 11.8s (compile: 11.4s, render: 447ms)
+@packages/main-site:dev: ✓ Compiled in 805ms
+error: script "dev:web" was terminated by signal SIGTERM (Polite quit request)
+ ERROR  run failed: command  exited (1)

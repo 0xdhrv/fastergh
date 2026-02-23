@@ -17,6 +17,7 @@ import { Link } from "./link";
 
 function Command({
 	className,
+	onKeyDown,
 	...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
 	return (
@@ -26,6 +27,18 @@ function Command({
 				"bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden rounded-md",
 				className,
 			)}
+			onKeyDown={(e) => {
+				if (e.ctrlKey && (e.key === "n" || e.key === "p")) {
+					e.preventDefault();
+					const event = new KeyboardEvent("keydown", {
+						key: e.key === "n" ? "ArrowDown" : "ArrowUp",
+						bubbles: true,
+						cancelable: true,
+					});
+					e.currentTarget.dispatchEvent(event);
+				}
+				onKeyDown?.(e);
+			}}
 			{...props}
 		/>
 	);

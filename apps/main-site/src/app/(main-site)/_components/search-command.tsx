@@ -1,6 +1,6 @@
 "use client";
 
-import { Result, useAtomValue } from "@effect-atom/atom-react";
+import { Result, useAtom, useAtomValue } from "@effect-atom/atom-react";
 import { Badge } from "@packages/ui/components/badge";
 import {
 	CommandDialog,
@@ -19,14 +19,21 @@ import {
 	Clock3,
 	FileCode2,
 	GitHubIcon,
+	GitCompare,
 	GitPullRequest,
+	Graph,
 	Inbox,
 	ListChecks,
 	Rocket,
 	Search,
+	Copy,
+	Settings,
+	Tag,
+	User,
 } from "@packages/ui/components/icons";
 import { Skeleton } from "@packages/ui/components/skeleton";
 import { cn } from "@packages/ui/lib/utils";
+import { useGithubWrite } from "@packages/ui/rpc/github-write";
 import { useProjectionQueries } from "@packages/ui/rpc/projection-queries";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { Option } from "effect";
@@ -73,6 +80,39 @@ function useRepoFromPathname() {
 	}, [pathname]);
 }
 
+function useIssueContextFromPathname() {
+	const pathname = usePathname();
+	return useMemo(() => {
+		const segments = pathname.split("/").filter(Boolean);
+		// /owner/repo/issues/123
+		// /owner/repo/pull/123
+		if (segments.length < 4) return null;
+		const owner = segments[0];
+		const name = segments[1];
+		const typeSegment = segments[2];
+		const numberSegment = segments[3];
+
+		if (
+			owner === undefined ||
+			name === undefined ||
+			typeSegment === undefined ||
+			numberSegment === undefined
+		)
+			return null;
+
+		const number = Number.parseInt(numberSegment, 10);
+		if (Number.isNaN(number)) return null;
+
+		if (typeSegment === "issues") {
+			return { owner, name, number, type: "issue" as const };
+		}
+		if (typeSegment === "pull") {
+			return { owner, name, number, type: "pr" as const };
+		}
+		return null;
+	}, [pathname]);
+}
+
 type SearchResultItem = {
 	readonly type: "pr" | "issue";
 	readonly number: number;
@@ -114,7 +154,12 @@ type NavigationKind =
 	| "actions"
 	| "code"
 	| "notifications"
-	| "recent";
+	| "recent"
+	| "releases"
+	| "tags"
+	| "compare"
+	| "insights"
+	| "settings";
 
 type NavigationTarget = {
 	readonly path: string;
@@ -177,7 +222,12 @@ function getRecentEntries(): ReadonlyArray<RecentEntry> {
 						entry.kind === "repo" ||
 						entry.kind === "actions" ||
 						entry.kind === "code" ||
-						entry.kind === "notifications"
+						entry.kind === "notifications" ||
+						entry.kind === "releases" ||
+						entry.kind === "tags" ||
+						entry.kind === "compare" ||
+						entry.kind === "insights" ||
+						entry.kind === "settings"
 							? entry.kind
 							: "recent",
 					updatedAt: entry.updatedAt,
@@ -244,6 +294,11 @@ function IconForKind({ kind }: { kind: NavigationKind }) {
 	if (kind === "code") return <FileCode2 className="size-4" />;
 	if (kind === "notifications") return <Inbox className="size-4" />;
 	if (kind === "repo") return <Search className="size-4" />;
+	if (kind === "releases") return <Tag className="size-4" />;
+	if (kind === "tags") return <Tag className="size-4" />;
+	if (kind === "compare") return <GitCompare className="size-4" />;
+	if (kind === "insights") return <Graph className="size-4" />;
+	if (kind === "settings") return <Settings className="size-4" />;
 	return <Clock3 className="size-4 text-muted-foreground" />;
 }
 
@@ -279,6 +334,120 @@ function ScopeIndicator({
 				</CommandShortcut>
 			)}
 		</div>
+	);
+}
+
+function IssueQuickActions({
+	context,
+	currentUserLogin,
+	onSelect,
+}: {
+	context: {
+		readonly owner: string;
+		readonly name: string;
+		readonly number: number;
+		readonly type: "issue" | "pr";
+	};
+	currentUserLogin: string | null;
+	onSelect: () => void;
+}) {
+	const client = useGithubWrite();
+	const [, updateAssignees] = useAtom(client.updateAssignees.call);
+	const [, updateState] = useAtom(client.updateIssueState.call);
+
+	const queries = useProjectionQueries();
+	const repoAtom = useMemo(
+		() =>
+			queries.getRepoOverview.subscription({
+				ownerLogin: context.owner,
+				name: context.name,
+			}),
+		[queries, context.owner, context.name],
+	);
+	const repoResult = useAtomValue(repoAtom);
+	const repositoryId = useMemo(() => {
+		const res = Result.value(repoResult);
+		if (Option.isSome(res) && res.value) {
+			return res.value.repositoryId;
+		}
+		return null;
+	}, [repoResult]);
+
+	const onAssignToMe = useCallback(() => {
+		if (currentUserLogin === null || repositoryId === null) return;
+		updateAssignees({
+			correlationId: crypto.randomUUID(),
+			ownerLogin: context.owner,
+			name: context.name,
+			repositoryId,
+			number: context.number,
+			assigneesToAdd: [currentUserLogin],
+			assigneesToRemove: [],
+		});
+		onSelect();
+	}, [
+		currentUserLogin,
+		repositoryId,
+		context,
+		updateAssignees,
+		onSelect,
+	]);
+
+	const onClose = useCallback(() => {
+		if (repositoryId === null) return;
+		updateState({
+			correlationId: crypto.randomUUID(),
+			ownerLogin: context.owner,
+			name: context.name,
+			repositoryId,
+			number: context.number,
+			state: "closed",
+		});
+		onSelect();
+	}, [context, repositoryId, updateState, onSelect]);
+
+	const onReopen = useCallback(() => {
+		if (repositoryId === null) return;
+		updateState({
+			correlationId: crypto.randomUUID(),
+			ownerLogin: context.owner,
+			name: context.name,
+			repositoryId,
+			number: context.number,
+			state: "open",
+		});
+		onSelect();
+	}, [context, repositoryId, updateState, onSelect]);
+
+	const onCopyReference = useCallback(() => {
+		const ref = `${context.owner}/${context.name}#${context.number}`;
+		navigator.clipboard.writeText(ref);
+		onSelect();
+	}, [context, onSelect]);
+
+	if (repositoryId === null) return null;
+
+	return (
+		<CommandGroup heading={`${context.type === "pr" ? "PR" : "Issue"} Actions`}>
+			{currentUserLogin !== null && (
+				<CommandItem value="assign to me" onSelect={onAssignToMe}>
+					<User className="size-4 text-muted-foreground" />
+					<span>Assign to me</span>
+				</CommandItem>
+			)}
+			<CommandItem value="close issue pr" onSelect={onClose}>
+				<CircleDot className="size-4 text-status-closed" />
+				<span>Close {context.type === "pr" ? "Pull Request" : "Issue"}</span>
+			</CommandItem>
+			<CommandItem value="reopen issue pr" onSelect={onReopen}>
+				<CircleDot className="size-4 text-status-open" />
+				<span>Reopen {context.type === "pr" ? "Pull Request" : "Issue"}</span>
+			</CommandItem>
+			<CommandItem value="copy reference id" onSelect={onCopyReference}>
+				<Copy className="size-4 text-muted-foreground" />
+				<span>Copy Reference</span>
+			</CommandItem>
+		</CommandGroup>
 	);
 }
 
@@ -323,6 +492,36 @@ function RepoQuickActions({
 			title: "Browse Code",
 			subtitle: `${repo.owner}/${repo.name}`,
 			kind: "code",
+		},
+		{
+			path: `${base}/releases`,
+			title: "Releases",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "releases",
+		},
+		{
+			path: `${base}/tags`,
+			title: "Tags",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "tags",
+		},
+		{
+			path: `${base}/compare`,
+			title: "Compare",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "compare",
+		},
+		{
+			path: `${base}/pulse`,
+			title: "Insights",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "insights",
+		},
+		{
+			path: `${base}/settings`,
+			title: "Settings",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "settings",
 		},
 		{
 			path: "/notifications",
@@ -988,10 +1187,12 @@ function GlobalQuickViews({
 	onSelect,
 	onGoToGitHub,
 	query,
+	currentUserLogin,
 }: {
 	onSelect: (target: NavigationTarget) => void;
 	onGoToGitHub: () => void;
 	query?: string;
+	currentUserLogin: string | null;
 }) {
 	const normalizedQuery = query?.trim().toLowerCase() ?? "";
 	const queryTokens =
@@ -1009,8 +1210,14 @@ function GlobalQuickViews({
 	const showWorkbench = matches("open workbench dashboard home");
 	const showNotifications = matches("open notifications inbox queue updates");
 	const showGitHub = matches("go to github github.com repo source");
+	const showProfile = matches("my profile user me");
 
-	if (!showWorkbench && !showNotifications && !showGitHub) {
+	if (
+		!showWorkbench &&
+		!showNotifications &&
+		!showGitHub &&
+		(!showProfile || currentUserLogin === null)
+	) {
 		return null;
 	}
 
@@ -1050,6 +1257,23 @@ function GlobalQuickViews({
 					<span>Open Notifications</span>
 				</CommandLinkItem>
 			)}
+			{showProfile && currentUserLogin !== null && (
+				<CommandLinkItem
+					value="my profile"
+					href={`/${currentUserLogin}`}
+					onBeforeNavigate={() =>
+						onSelect({
+							path: `/${currentUserLogin}`,
+							title: "My Profile",
+							subtitle: currentUserLogin,
+							kind: "global",
+						})
+					}
+				>
+					<User className="size-4 text-muted-foreground" />
+					<span>My Profile</span>
+				</CommandLinkItem>
+			)}
 			{showGitHub && (
 				<CommandItem value="go to github github.com" onSelect={onGoToGitHub}>
 					<GitHubIcon className="size-4 text-muted-foreground" />
@@ -1084,7 +1308,30 @@ export function SearchCommand() {
 	const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null);
 	const debouncedQuery = useDebouncedValue(query, 250);
 	const repo = useRepoFromPathname();
+	const issueContext = useIssueContextFromPathname();
 	const pathname = usePathname();
+
+	// Fetch current user login for "Assign to me"
+	const { isReadyForQueries } = useConvexAuthState();
+	const queries = useProjectionQueries();
+	const dashboardAtom = useMemo(
+		() =>
+			queries.getHomeDashboard.subscription(
+				{},
+				{
+					enabled: isReadyForQueries,
+				},
+			),
+		[queries, isReadyForQueries],
+	);
+	const dashboardResult = useAtomValue(dashboardAtom);
+	const currentUserLogin = useMemo(() => {
+		const resultOption = Result.value(dashboardResult);
+		if (Option.isSome(resultOption)) {
+			return resultOption.value.githubLogin;
+		}
+		return null;
+	}, [dashboardResult]);
 
 	useHotkey("Mod+K", (event) => {
 		event.preventDefault();
@@ -1289,6 +1536,7 @@ export function SearchCommand() {
 						<GlobalQuickViews
 							onSelect={handleSelect}
 							onGoToGitHub={goToGitHub}
+							currentUserLogin={currentUserLogin}
 						/>
 						<CommandSeparator />
 						<RepoResults
@@ -1315,6 +1563,7 @@ export function SearchCommand() {
 								onSelect={handleSelect}
 								onGoToGitHub={goToGitHub}
 								query={trimmed}
+								currentUserLogin={currentUserLogin}
 							/>
 						)}
 						<QueryDslSummary query={parsedQuery} repo={effectiveRepo} />
@@ -1332,6 +1581,7 @@ export function SearchCommand() {
 								onSelect={handleSelect}
 								onGoToGitHub={goToGitHub}
 								query={trimmed}
+								currentUserLogin={currentUserLogin}
 							/>
 						)}
 					</>
@@ -1339,6 +1589,16 @@ export function SearchCommand() {
 
 				{hasRepoScope && !hasQuery && effectiveRepo !== null && (
 					<>
+						{issueContext !== null && (
+							<>
+								<IssueQuickActions
+									context={issueContext}
+									currentUserLogin={currentUserLogin}
+									onSelect={() => setOpen(false)}
+								/>
+								<CommandSeparator />
+							</>
+						)}
 						<RepoQuickActions
 							repo={effectiveRepo}
 							onSelect={handleSelect}
@@ -1362,6 +1622,7 @@ export function SearchCommand() {
 								onSelect={handleSelect}
 								onGoToGitHub={goToGitHub}
 								query={trimmed}
+								currentUserLogin={currentUserLogin}
 							/>
 						)}
 						<QueryDslSummary query={parsedQuery} repo={effectiveRepo} />
@@ -1396,6 +1657,7 @@ export function SearchCommand() {
 								onSelect={handleSelect}
 								onGoToGitHub={goToGitHub}
 								query={trimmed}
+								currentUserLogin={currentUserLogin}
 							/>
 						)}
 					</>

@@ -26,6 +26,7 @@ import {
 	ListChecks,
 	Rocket,
 	Search,
+	Copy,
 	Settings,
 	Tag,
 	User,
@@ -418,6 +419,12 @@ function IssueQuickActions({
 		onSelect();
 	}, [context, repositoryId, updateState, onSelect]);
 
+	const onCopyReference = useCallback(() => {
+		const ref = `${context.owner}/${context.name}#${context.number}`;
+		navigator.clipboard.writeText(ref);
+		onSelect();
+	}, [context, onSelect]);
+
 	if (repositoryId === null) return null;
 
 	return (
@@ -435,6 +442,10 @@ function IssueQuickActions({
 			<CommandItem value="reopen issue pr" onSelect={onReopen}>
 				<CircleDot className="size-4 text-status-open" />
 				<span>Reopen {context.type === "pr" ? "Pull Request" : "Issue"}</span>
+			</CommandItem>
+			<CommandItem value="copy reference id" onSelect={onCopyReference}>
+				<Copy className="size-4 text-muted-foreground" />
+				<span>Copy Reference</span>
 			</CommandItem>
 		</CommandGroup>
 	);
@@ -1176,10 +1187,12 @@ function GlobalQuickViews({
 	onSelect,
 	onGoToGitHub,
 	query,
+	currentUserLogin,
 }: {
 	onSelect: (target: NavigationTarget) => void;
 	onGoToGitHub: () => void;
 	query?: string;
+	currentUserLogin: string | null;
 }) {
 	const normalizedQuery = query?.trim().toLowerCase() ?? "";
 	const queryTokens =
@@ -1197,8 +1210,14 @@ function GlobalQuickViews({
 	const showWorkbench = matches("open workbench dashboard home");
 	const showNotifications = matches("open notifications inbox queue updates");
 	const showGitHub = matches("go to github github.com repo source");
+	const showProfile = matches("my profile user me");
 
-	if (!showWorkbench && !showNotifications && !showGitHub) {
+	if (
+		!showWorkbench &&
+		!showNotifications &&
+		!showGitHub &&
+		(!showProfile || currentUserLogin === null)
+	) {
 		return null;
 	}
 
@@ -1236,6 +1255,23 @@ function GlobalQuickViews({
 				>
 					<Inbox className="size-4 text-muted-foreground" />
 					<span>Open Notifications</span>
+				</CommandLinkItem>
+			)}
+			{showProfile && currentUserLogin !== null && (
+				<CommandLinkItem
+					value="my profile"
+					href={`/${currentUserLogin}`}
+					onBeforeNavigate={() =>
+						onSelect({
+							path: `/${currentUserLogin}`,
+							title: "My Profile",
+							subtitle: currentUserLogin,
+							kind: "global",
+						})
+					}
+				>
+					<User className="size-4 text-muted-foreground" />
+					<span>My Profile</span>
 				</CommandLinkItem>
 			)}
 			{showGitHub && (
@@ -1500,6 +1536,7 @@ export function SearchCommand() {
 						<GlobalQuickViews
 							onSelect={handleSelect}
 							onGoToGitHub={goToGitHub}
+							currentUserLogin={currentUserLogin}
 						/>
 						<CommandSeparator />
 						<RepoResults
@@ -1526,6 +1563,7 @@ export function SearchCommand() {
 								onSelect={handleSelect}
 								onGoToGitHub={goToGitHub}
 								query={trimmed}
+								currentUserLogin={currentUserLogin}
 							/>
 						)}
 						<QueryDslSummary query={parsedQuery} repo={effectiveRepo} />
@@ -1543,6 +1581,7 @@ export function SearchCommand() {
 								onSelect={handleSelect}
 								onGoToGitHub={goToGitHub}
 								query={trimmed}
+								currentUserLogin={currentUserLogin}
 							/>
 						)}
 					</>
@@ -1583,6 +1622,7 @@ export function SearchCommand() {
 								onSelect={handleSelect}
 								onGoToGitHub={goToGitHub}
 								query={trimmed}
+								currentUserLogin={currentUserLogin}
 							/>
 						)}
 						<QueryDslSummary query={parsedQuery} repo={effectiveRepo} />
@@ -1617,6 +1657,7 @@ export function SearchCommand() {
 								onSelect={handleSelect}
 								onGoToGitHub={goToGitHub}
 								query={trimmed}
+								currentUserLogin={currentUserLogin}
 							/>
 						)}
 					</>

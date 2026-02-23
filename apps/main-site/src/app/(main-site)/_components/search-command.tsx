@@ -1,6 +1,6 @@
 "use client";
 
-import { Result, useAtomValue } from "@effect-atom/atom-react";
+import { Result, useAtom, useAtomValue } from "@effect-atom/atom-react";
 import { Badge } from "@packages/ui/components/badge";
 import {
 	CommandDialog,
@@ -28,9 +28,11 @@ import {
 	Search,
 	Settings,
 	Tag,
+	User,
 } from "@packages/ui/components/icons";
 import { Skeleton } from "@packages/ui/components/skeleton";
 import { cn } from "@packages/ui/lib/utils";
+import { useGithubWrite } from "@packages/ui/rpc/github-write";
 import { useProjectionQueries } from "@packages/ui/rpc/projection-queries";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { Option } from "effect";
@@ -74,6 +76,39 @@ function useRepoFromPathname() {
 		const name = segments[1];
 		if (owner === undefined || name === undefined) return null;
 		return { owner, name };
+	}, [pathname]);
+}
+
+function useIssueContextFromPathname() {
+	const pathname = usePathname();
+	return useMemo(() => {
+		const segments = pathname.split("/").filter(Boolean);
+		// /owner/repo/issues/123
+		// /owner/repo/pull/123
+		if (segments.length < 4) return null;
+		const owner = segments[0];
+		const name = segments[1];
+		const typeSegment = segments[2];
+		const numberSegment = segments[3];
+
+		if (
+			owner === undefined ||
+			name === undefined ||
+			typeSegment === undefined ||
+			numberSegment === undefined
+		)
+			return null;
+
+		const number = Number.parseInt(numberSegment, 10);
+		if (Number.isNaN(number)) return null;
+
+		if (typeSegment === "issues") {
+			return { owner, name, number, type: "issue" as const };
+		}
+		if (typeSegment === "pull") {
+			return { owner, name, number, type: "pr" as const };
+		}
+		return null;
 	}, [pathname]);
 }
 
@@ -298,6 +333,110 @@ function ScopeIndicator({
 				</CommandShortcut>
 			)}
 		</div>
+	);
+}
+
+function IssueQuickActions({
+	context,
+	currentUserLogin,
+	onSelect,
+}: {
+	context: {
+		readonly owner: string;
+		readonly name: string;
+		readonly number: number;
+		readonly type: "issue" | "pr";
+	};
+	currentUserLogin: string | null;
+	onSelect: () => void;
+}) {
+	const client = useGithubWrite();
+	const [, updateAssignees] = useAtom(client.updateAssignees.call);
+	const [, updateState] = useAtom(client.updateIssueState.call);
+
+	const queries = useProjectionQueries();
+	const repoAtom = useMemo(
+		() =>
+			queries.getRepoOverview.subscription({
+				ownerLogin: context.owner,
+				name: context.name,
+			}),
+		[queries, context.owner, context.name],
+	);
+	const repoResult = useAtomValue(repoAtom);
+	const repositoryId = useMemo(() => {
+		const res = Result.value(repoResult);
+		if (Option.isSome(res) && res.value) {
+			return res.value.repositoryId;
+		}
+		return null;
+	}, [repoResult]);
+
+	const onAssignToMe = useCallback(() => {
+		if (currentUserLogin === null || repositoryId === null) return;
+		updateAssignees({
+			correlationId: crypto.randomUUID(),
+			ownerLogin: context.owner,
+			name: context.name,
+			repositoryId,
+			number: context.number,
+			assigneesToAdd: [currentUserLogin],
+			assigneesToRemove: [],
+		});
+		onSelect();
+	}, [
+		currentUserLogin,
+		repositoryId,
+		context,
+		updateAssignees,
+		onSelect,
+	]);
+
+	const onClose = useCallback(() => {
+		if (repositoryId === null) return;
+		updateState({
+			correlationId: crypto.randomUUID(),
+			ownerLogin: context.owner,
+			name: context.name,
+			repositoryId,
+			number: context.number,
+			state: "closed",
+		});
+		onSelect();
+	}, [context, repositoryId, updateState, onSelect]);
+
+	const onReopen = useCallback(() => {
+		if (repositoryId === null) return;
+		updateState({
+			correlationId: crypto.randomUUID(),
+			ownerLogin: context.owner,
+			name: context.name,
+			repositoryId,
+			number: context.number,
+			state: "open",
+		});
+		onSelect();
+	}, [context, repositoryId, updateState, onSelect]);
+
+	if (repositoryId === null) return null;
+
+	return (
+		<CommandGroup heading={`${context.type === "pr" ? "PR" : "Issue"} Actions`}>
+			{currentUserLogin !== null && (
+				<CommandItem value="assign to me" onSelect={onAssignToMe}>
+					<User className="size-4 text-muted-foreground" />
+					<span>Assign to me</span>
+				</CommandItem>
+			)}
+			<CommandItem value="close issue pr" onSelect={onClose}>
+				<CircleDot className="size-4 text-status-closed" />
+				<span>Close {context.type === "pr" ? "Pull Request" : "Issue"}</span>
+			</CommandItem>
+			<CommandItem value="reopen issue pr" onSelect={onReopen}>
+				<CircleDot className="size-4 text-status-open" />
+				<span>Reopen {context.type === "pr" ? "Pull Request" : "Issue"}</span>
+			</CommandItem>
+		</CommandGroup>
 	);
 }
 
@@ -1133,7 +1272,30 @@ export function SearchCommand() {
 	const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null);
 	const debouncedQuery = useDebouncedValue(query, 250);
 	const repo = useRepoFromPathname();
+	const issueContext = useIssueContextFromPathname();
 	const pathname = usePathname();
+
+	// Fetch current user login for "Assign to me"
+	const { isReadyForQueries } = useConvexAuthState();
+	const queries = useProjectionQueries();
+	const dashboardAtom = useMemo(
+		() =>
+			queries.getHomeDashboard.subscription(
+				{},
+				{
+					enabled: isReadyForQueries,
+				},
+			),
+		[queries, isReadyForQueries],
+	);
+	const dashboardResult = useAtomValue(dashboardAtom);
+	const currentUserLogin = useMemo(() => {
+		const resultOption = Result.value(dashboardResult);
+		if (Option.isSome(resultOption)) {
+			return resultOption.value.githubLogin;
+		}
+		return null;
+	}, [dashboardResult]);
 
 	useHotkey("Mod+K", (event) => {
 		event.preventDefault();
@@ -1388,6 +1550,16 @@ export function SearchCommand() {
 
 				{hasRepoScope && !hasQuery && effectiveRepo !== null && (
 					<>
+						{issueContext !== null && (
+							<>
+								<IssueQuickActions
+									context={issueContext}
+									currentUserLogin={currentUserLogin}
+									onSelect={() => setOpen(false)}
+								/>
+								<CommandSeparator />
+							</>
+						)}
 						<RepoQuickActions
 							repo={effectiveRepo}
 							onSelect={handleSelect}

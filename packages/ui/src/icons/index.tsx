@@ -19,8 +19,11 @@ import {
 	DownloadIcon,
 	FileDirectoryIcon,
 	FileIcon,
+	GearIcon,
+	GitCompareIcon,
 	GitPullRequestIcon,
 	GrabberIcon,
+	GraphIcon,
 	HomeIcon,
 	KebabHorizontalIcon,
 	MoonIcon,
@@ -62,6 +65,9 @@ const FileCode2 = FileIcon;
 const Folder = FileDirectoryIcon;
 const FolderOpen = FileDirectoryIcon;
 const Activity = SyncIcon;
+const GitCompare = GitCompareIcon;
+const Settings = GearIcon;
+const Graph = GraphIcon;
 const GitBranch = GitPullRequestIcon;
 const GitPullRequest = GitPullRequestIcon;
 const GitCommit = GitPullRequestIcon;
@@ -246,11 +252,17 @@ export {
 	FileText,
 	Folder,
 	FolderOpen,
+	GearIcon,
 	GitBranch,
 	GitHubIcon,
+	GitCompare,
+	GitCompareIcon,
 	GitCommit,
 	GitCommitHorizontal,
 	GitPullRequest,
+	GrabberIcon,
+	Graph,
+	GraphIcon,
 	GripVerticalIcon,
 	Home,
 	HomeIcon,
@@ -279,6 +291,7 @@ export {
 	Rows3,
 	Search,
 	SearchIcon,
+	Settings,
 	ShieldAlert,
 	ShieldCheck,
 	Sun,

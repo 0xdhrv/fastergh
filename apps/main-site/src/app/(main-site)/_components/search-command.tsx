@@ -19,11 +19,15 @@ import {
 	Clock3,
 	FileCode2,
 	GitHubIcon,
+	GitCompare,
 	GitPullRequest,
+	Graph,
 	Inbox,
 	ListChecks,
 	Rocket,
 	Search,
+	Settings,
+	Tag,
 } from "@packages/ui/components/icons";
 import { Skeleton } from "@packages/ui/components/skeleton";
 import { cn } from "@packages/ui/lib/utils";
@@ -114,7 +118,12 @@ type NavigationKind =
 	| "actions"
 	| "code"
 	| "notifications"
-	| "recent";
+	| "recent"
+	| "releases"
+	| "tags"
+	| "compare"
+	| "insights"
+	| "settings";
 
 type NavigationTarget = {
 	readonly path: string;
@@ -177,7 +186,12 @@ function getRecentEntries(): ReadonlyArray<RecentEntry> {
 						entry.kind === "repo" ||
 						entry.kind === "actions" ||
 						entry.kind === "code" ||
-						entry.kind === "notifications"
+						entry.kind === "notifications" ||
+						entry.kind === "releases" ||
+						entry.kind === "tags" ||
+						entry.kind === "compare" ||
+						entry.kind === "insights" ||
+						entry.kind === "settings"
 							? entry.kind
 							: "recent",
 					updatedAt: entry.updatedAt,
@@ -244,6 +258,11 @@ function IconForKind({ kind }: { kind: NavigationKind }) {
 	if (kind === "code") return <FileCode2 className="size-4" />;
 	if (kind === "notifications") return <Inbox className="size-4" />;
 	if (kind === "repo") return <Search className="size-4" />;
+	if (kind === "releases") return <Tag className="size-4" />;
+	if (kind === "tags") return <Tag className="size-4" />;
+	if (kind === "compare") return <GitCompare className="size-4" />;
+	if (kind === "insights") return <Graph className="size-4" />;
+	if (kind === "settings") return <Settings className="size-4" />;
 	return <Clock3 className="size-4 text-muted-foreground" />;
 }
 
@@ -323,6 +342,36 @@ function RepoQuickActions({
 			title: "Browse Code",
 			subtitle: `${repo.owner}/${repo.name}`,
 			kind: "code",
+		},
+		{
+			path: `${base}/releases`,
+			title: "Releases",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "releases",
+		},
+		{
+			path: `${base}/tags`,
+			title: "Tags",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "tags",
+		},
+		{
+			path: `${base}/compare`,
+			title: "Compare",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "compare",
+		},
+		{
+			path: `${base}/pulse`,
+			title: "Insights",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "insights",
+		},
+		{
+			path: `${base}/settings`,
+			title: "Settings",
+			subtitle: `${repo.owner}/${repo.name}`,
+			kind: "settings",
 		},
 		{
 			path: "/notifications",
